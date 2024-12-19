@@ -1,7 +1,7 @@
 
 # Text2midi: Generating Symbolic Music from Captions
 
-[Demo](https://huggingface.co/spaces/amaai-lab/text2midi) | [Model](https://huggingface.co/amaai-lab/text2midi) | [Website and Examples](https://github.com/AMAAI-Lab/text2midi) | [Paper](https://arxiv.org/abs/TBD) | [Dataset](https://huggingface.co/datasets/amaai-lab/MidiCaps)
+[Demo](https://huggingface.co/spaces/amaai-lab/text2midi) | [Model](https://huggingface.co/amaai-lab/text2midi) | [Website and Examples](https://github.com/AMAAI-Lab/Text2midi) | [Paper](https://arxiv.org/abs/TBD) | [Dataset](https://huggingface.co/datasets/amaai-lab/MidiCaps)
 
 [![Hugging Face Spaces](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Spaces-blue)](https://huggingface.co/spaces/amaai-lab/text2midi)
 </div>
