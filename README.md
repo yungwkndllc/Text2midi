@@ -55,8 +55,8 @@ post_processing("output.mid", "output.mid")
 
 ## Installation
 ```bash
-git clone https://github.com/AMAAI-Lab/text-2-midi
-cd text-2-midi
+git clone https://github.com/AMAAI-Lab/Text2midi
+cd Text2midi
 pip install -r requirements.txt
 ```
 
