@@ -58,10 +58,17 @@ generated_midi.dump_midi("output.mid")
 ```
 
 ## Installation
+If you have CUDA supported machine:
 ```bash
 git clone https://github.com/AMAAI-Lab/text-2-midi
 cd text-2-midi
 pip install -r requirements.txt
+```
+Alternatively, if you have MPS supported machine:
+```bash
+git clone https://github.com/AMAAI-Lab/text-2-midi
+cd text-2-midi
+pip install -r requirements-mac.txt
 ```
 
 ## Datasets
@@ -118,6 +125,12 @@ accelerate launch train.py \
 --batch_size=16 \
 --learning_rate=1e-4 \
 --epochs=40 \
+```
+
+## Inference
+We spport inference on CUDA, MPS and cpu. Please make sure you have pip installed the correct requirement file (requirments.txt for CUDA, requirements-mac.txt for MPS)
+```bash
+python model/transformer_model.py --caption <your intended descriptions>
 ```
 
 ## Citation
