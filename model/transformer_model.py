@@ -38,6 +38,7 @@ from torch.utils.data import DataLoader, Dataset
 import torch.profiler
 
 from accelerate import Accelerator
+import argparse  # Add this import
 
 class CaptionDataset(Dataset):
     def __init__(self, captions):
@@ -1377,7 +1378,7 @@ def process_caption(gpu_id, captions, model, tokenizer, r_tokenizer):
 #         # print(type(generated_midi))
 #         generated_midi.dump_midi(f"../res/{location}")
 
-def test_generate():
+def test_generate(caption):
     # Detect device: CUDA, MPS, or CPU
     if torch.cuda.is_available():
         device = torch.device("cuda")
@@ -1424,7 +1425,7 @@ def test_generate():
     #     p.join()
     '''
     # src = "A pop song with nostalgic feeling."
-    src = "A happy christmas song suitable for festive mood."
+    # src = "A happy christmas song suitable for festive mood."
     # src = "A melodic electronic song with ambient elements, featuring piano, acoustic guitar, alto saxophone, string ensemble, and electric bass. Set in G minor with a 4/4 time signature, it moves at a lively Presto tempo. The composition evokes a blend of relaxation and darkness, with hints of happiness and a meditative quality."
     # src="An energetic and melodic electronic trance track with a space and retro vibe, featuring drums, distortion guitar, flute, synth bass, and slap bass. Set in A minor with a fast tempo of 138 BPM, the song maintains a 4/4 time signature throughout its duration."
     # src="A cheerful and melodic pop Christmas song featuring piano, acoustic guitar, vibraphone, bass, and drums, set in the key of Eb minor with a fast tempo of 123 bpm and a 4/4 time signature, creating a joyful and relaxing atmosphere."
@@ -1432,247 +1433,17 @@ def test_generate():
     # src="This motivational electronic and pop song features a clean electric guitar, rock organ, synth voice, acoustic guitar, and vibraphone, creating a melodic and uplifting atmosphere. Set in the key of G# minor with a 4/4 time signature, the track moves at an energetic Allegro tempo of 120 beats per minute. The chord progression of Bbm7 and F# adds to the song's inspiring and corporate feel."
     # src = "Played at 149 beats per minute in 2/4 time signature and the key of G major, classical piece with instruments: bassoon, clarinet, flute, horn, oboe, and trumpet."
     # src= 'Played at 114 beats per minute in 1/4 time signature and the key of g# minor, classical piece with the following instruments: clarinet, english horn, flute, horn, piccolo, trombone, and trumpet.'
-    inputs = tokenizer(src, return_tensors='pt', padding=True, truncation=True)
+    inputs = tokenizer(caption, return_tensors='pt', padding=True, truncation=True)
     input_ids = nn.utils.rnn.pad_sequence(inputs.input_ids, batch_first=True, padding_value=0)
     input_ids = input_ids.to(device)
     attention_mask = nn.utils.rnn.pad_sequence(inputs.attention_mask, batch_first=True, padding_value=0)
     attention_mask = attention_mask.to(device)
-    output = model.generate(input_ids, attention_mask,max_len=2000,temperature = 0.9)
+    output = model.generate(input_ids, attention_mask, max_len=2000, temperature=0.9)
     output_list = output[0].tolist()
 
     # Decode and save MIDI
     generated_midi = r_tokenizer.decode(output_list)
     generated_midi.dump_midi(f"../../output_christmas_2.mid")
-
-import random
-from concurrent.futures import ThreadPoolExecutor
-
-def load_model_and_tokenizer(gpu_id, model_path, vocab_size, tokenizer_filepath):
-    device = f'cuda:{gpu_id}'
-    torch.cuda.set_device(gpu_id)
-    with open(tokenizer_filepath, "rb") as f:
-        r_tokenizer = pickle.load(f)
-    model = Transformer(vocab_size, 768, 8, 2048, 18, 1024, False, 8, device=device)
-    model.load_state_dict(torch.load(model_path, map_location=device))
-    model.to(device)
-    model.eval()
-    tokenizer = T5Tokenizer.from_pretrained("google/flan-t5-base")
-    return model, tokenizer, r_tokenizer
-
-# def process_example(gpu_id, model, tokenizer, r_tokenizer, example, output_path):
-#     start_time = time.time()
-#     print(f"Starting processing on GPU {gpu_id} for example: {example[:50]}...")  # Add logging
-#     device = f'cuda:{gpu_id}'
-#     torch.cuda.set_device(gpu_id)
-    
-#     log_dir = './log'
-#     ensure_log_dir_exists(log_dir)
-    
-#     with torch.profiler.profile(
-#         activities=[
-#             torch.profiler.ProfilerActivity.CPU,
-#             torch.profiler.ProfilerActivity.CUDA,
-#         ],
-#         schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=2),
-#         on_trace_ready=torch.profiler.tensorboard_trace_handler(log_dir),
-#         record_shapes=True,
-#         profile_memory=True,
-#         with_stack=True
-#     ) as prof:
-#         inputs = tokenizer(example, return_tensors='pt', padding=True, truncation=True)
-#         input_ids = nn.utils.rnn.pad_sequence(inputs.input_ids, batch_first=True, padding_value=0)
-#         input_ids = input_ids.to(device)
-#         attention_mask = nn.utils.rnn.pad_sequence(inputs.attention_mask, batch_first=True, padding_value=0)
-#         attention_mask = attention_mask.to(device)
-        
-#         preprocess_time = time.time()
-#         print(f"Preprocessing time on GPU {gpu_id}: {preprocess_time - start_time:.2f} seconds")  # Add logging
-        
-#         output = model.generate(input_ids, attention_mask, max_len=2000, temperature=0.9)
-        
-#         generation_time = time.time()
-#         print(f"Generation time on GPU {gpu_id}: {generation_time - preprocess_time:.2f} seconds")  # Add logging
-        
-#         output_list = output[0].tolist()
-#         generated_midi = r_tokenizer.decode(output_list)
-#         generated_midi.dump_midi(output_path)
-        
-#         end_time = time.time()
-#         print(f"Total time on GPU {gpu_id}: {end_time - start_time:.2f} seconds")  # Add logging
-#         print(f"Output saved to: {output_path}")
-#         prof.step()
-
-def run_parallel_generation():
-    device = 'cuda'
-    artifact_folder = '../artifacts'
-    tokenizer_filepath = os.path.join(artifact_folder, "vocab_remi.pkl")
-    caption_dataset_path = '/root/text2midi/captions/train.json'
-    selected_captions_path = '/root/test/text2midi/selected_captions.json'
-    print(f'caption_dataset_path: {caption_dataset_path}')
-    
-    # Load the tokenizer dictionary
-    with open(tokenizer_filepath, "rb") as f:
-        r_tokenizer = pickle.load(f)
-    vocab_size = len(r_tokenizer)
-    print("Vocab size: ", vocab_size)
-    
-    model_path = '/root/test/text2midi/output_new/epoch_30/pytorch_model.bin'
-    
-    # with jsonlines.open(caption_dataset_path) as reader:
-    #     captions = [line for line in reader if line.get('test_set') is False]
-    
-    # selected_captions = random.sample(captions, 500)
-    
-    # # Save selected captions to a JSON file
-    # with open(selected_captions_path, 'w') as f:
-    #     json.dump(selected_captions, f, indent=4)
-    
-    with open(selected_captions_path, 'r') as f:
-        selected_captions = json.load(f)
-    
-    num_gpus = torch.cuda.device_count()
-    
-    # Load model and tokenizer once per GPU
-    models_tokenizers = [load_model_and_tokenizer(gpu_id, model_path, vocab_size, tokenizer_filepath) for gpu_id in range(num_gpus)]
-    
-    with ThreadPoolExecutor(max_workers=num_gpus) as executor:
-        futures = []
-        for i in tqdm(range(0, len(selected_captions), num_gpus), desc="Generating MIDI files"):
-            for j in range(num_gpus):
-                if i + j < len(selected_captions):
-                    caption = selected_captions[i + j]
-                    example = caption['caption']
-                    location = caption['location']
-                    output_path = os.path.join('/root/test/text2midi/res_acc', location)
-                    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                    model, tokenizer, r_tokenizer = models_tokenizers[j]
-                    futures.append(executor.submit(process_example, j, model, tokenizer, r_tokenizer, example, output_path))
-        
-        for future in futures:
-            future.result()
-
-
-# def load_resources(model_path, vocab_size, tokenizer_filepath, device):
-#     """Load resources inside subprocess."""
-#     torch.cuda.set_device(device)
-#     with open(tokenizer_filepath, "rb") as f:
-#         r_tokenizer = pickle.load(f)
-#     model = Transformer(vocab_size, 768, 8, 2048, 18, 1024, False, 8, device=device)
-#     model.load_state_dict(torch.load(model_path, map_location=device))
-#     model.to(device)
-#     model.eval()
-#     tokenizer = T5Tokenizer.from_pretrained("google/flan-t5-base")
-#     return model, tokenizer, r_tokenizer
-
-# def process_example(caption, output_path, model_path, vocab_size, tokenizer_filepath, device):
-#     """Generate output for a single example."""
-#     # Load resources in subprocess
-#     model, tokenizer, r_tokenizer = load_resources(model_path, vocab_size, tokenizer_filepath, device)
-#     start_time = time.time()
-    
-#     inputs = tokenizer(caption, return_tensors='pt', padding=True, truncation=True)
-#     input_ids = inputs['input_ids'].to(device)
-#     attention_mask = inputs['attention_mask'].to(device)
-
-#     output = model.generate(input_ids, attention_mask, max_len=2000, temperature=0.9)
-#     output_list = output[0].tolist()
-#     generated_midi = r_tokenizer.decode(output_list)
-#     generated_midi.dump_midi(output_path)
-
-#     end_time = time.time()
-#     print(f"Processed example on {device} in {end_time - start_time:.2f} seconds")
-
-# def run_parallel_generation():
-#     set_start_method('spawn', force=True)  # Use 'spawn' start method
-
-#     artifact_folder = '../artifacts'
-#     tokenizer_filepath = os.path.join(artifact_folder, "vocab_remi.pkl")
-#     caption_dataset_path = '/root/text2midi/captions/train.json'
-#     selected_captions_path = '/root/test/text2midi/selected_captions.json'
-
-#     # Load captions and select 500 random examples
-#     with jsonlines.open(caption_dataset_path) as reader:
-#         captions = [line for line in reader if not line.get('test_set')]
-#     selected_captions = random.sample(captions, 500)  # Select 500 random captions
-
-#     # Save selected captions to a JSON file
-#     with open(selected_captions_path, 'w') as f:
-#         json.dump(selected_captions, f, indent=4)
-#     print(f"Selected 500 captions and saved to {selected_captions_path}")
-
-#     model_path = '/root/test/text2midi/output_new/epoch_30/pytorch_model.bin'
-#     vocab_size = len(pickle.load(open(tokenizer_filepath, "rb")))
-
-#     num_gpus = torch.cuda.device_count()
-#     assert num_gpus > 0, "No GPUs available"
-
-#     processes = []
-#     for i in tqdm(range(0, len(selected_captions), num_gpus), desc="Generating MIDI files"):
-#         for j in range(num_gpus):
-#             if i + j < len(selected_captions):
-#                 caption = selected_captions[i + j]
-#                 example = caption['caption']
-#                 location = caption['location']
-#                 output_path = os.path.join('/root/test/text2midi/res_acc', location)
-#                 os.makedirs(os.path.dirname(output_path), exist_ok=True)
-
-#                 # Spawn a process per GPU
-#                 process = Process(
-#                     target=process_example,
-#                     args=(example, output_path, model_path, vocab_size, tokenizer_filepath, f'cuda:{j}')
-#                 )
-#                 process.start()
-#                 processes.append(process)
-
-#         # Wait for all active processes in this batch to complete
-#         for process in processes:
-#             process.join()
-#         processes.clear()  # Clear the process list for the next batch
-
-#     print("All tasks completed")
-
-# import sys
-
-# def process_split_captions(split_index):
-#     device = f'cuda:{split_index}'
-#     torch.cuda.set_device(device)
-    
-#     artifact_folder = '../artifacts'
-#     tokenizer_filepath = os.path.join(artifact_folder, "vocab_remi.pkl")
-#     model_path = '/root/test/text2midi/output_new/epoch_30/pytorch_model.bin'
-#     captions_path = f'/root/test/text2midi/selected_captions_{split_index}.json'
-    
-#     with open(tokenizer_filepath, "rb") as f):
-#         r_tokenizer = pickle.load(f)
-#     vocab_size = len(r_tokenizer)
-    
-#     model = Transformer(vocab_size, 768, 8, 2048, 18, 1024, False, 8, device=device)
-#     model.load_state_dict(torch.load(model_path, map_location=device))
-#     model.to(device)
-#     model.eval()
-    
-#     tokenizer = T5Tokenizer.from_pretrained("google/flan-t5-base")
-    
-#     with open(captions_path, 'r') as f:
-#         captions = json.load(f)
-    
-#     for caption in captions:
-#         example = caption['caption']
-#         location = caption['location']
-#         output_path = os.path.join('/root/test/text2midi/res_acc', location)
-#         os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        
-#         inputs = tokenizer(example, return_tensors='pt', padding=True, truncation=True)
-#         input_ids = nn.utils.rnn.pad_sequence(inputs.input_ids, batch_first=True, padding_value=0)
-#         input_ids = input_ids.to(device)
-#         attention_mask = nn.utils.rnn.pad_sequence(inputs.attention_mask, batch_first=True, padding_value=0)
-#         attention_mask = attention_mask.to(device)
-        
-#         output = model.generate(input_ids, attention_mask, max_len=2000, temperature=0.9)
-#         output_list = output[0].tolist()
-#         generated_midi = r_tokenizer.decode(output_list)
-#         generated_midi.dump_midi(output_path)
-#         print(f"Processed and saved to: {output_path}")
 
 def load_model_and_tokenizer(accelerator, model_path, vocab_size, tokenizer_filepath):
     device = accelerator.device
@@ -1722,9 +1493,17 @@ def run_accelerate_generation():
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
             process_example(accelerator, model, tokenizer, r_tokenizer, example, location, output_path)
             
-run_accelerate_generation()
+# run_accelerate_generation() #uncomment this and comment __main__ to run accelerate generation
 
-# if __name__ == "__main__":
-#     run_accelerate_generation()
-#     print("Done")
+def main():
+    parser = argparse.ArgumentParser(description="Generate MIDI from caption")
+    parser.add_argument('--caption', type=str, required=True, help='Caption to generate MIDI from')
+    args = parser.parse_args()
+    test_generate(args.caption)
 
+'''
+comment out the next section function and uncomment the run_accelerate_generation() function to run the accelerate generation
+'''
+if __name__ == "__main__":
+    main()
+    print("Done")
