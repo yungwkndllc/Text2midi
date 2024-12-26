@@ -1,7 +1,6 @@
-
 # Text2midi: Generating Symbolic Music from Captions
 
-[Demo](https://huggingface.co/spaces/amaai-lab/text2midi) | [Model](https://huggingface.co/amaai-lab/text2midi) | [Website and Examples](https://github.com/AMAAI-Lab/Text2midi) | [Paper](https://arxiv.org/abs/TBD) | [Dataset](https://huggingface.co/datasets/amaai-lab/MidiCaps)
+[Demo](https://huggingface.co/spaces/amaai-lab/text2midi) | [Model](https://huggingface.co/amaai-lab/text2midi) | [Website](https://github.com/AMAAI-Lab/Text2midi) | [Examples](https://aaaisubmission25.github.io/text2midi/) | [Paper](https://arxiv.org/abs/2412.16526) | [Dataset](https://huggingface.co/datasets/amaai-lab/MidiCaps)
 
 [![Hugging Face Spaces](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Spaces-blue)](https://huggingface.co/spaces/amaai-lab/text2midi)
 </div>
@@ -19,24 +18,30 @@
 Generate symbolic music from a text prompt:
 
 ```python
+import pickle
+import torch
+import torch.nn as nn
 from transformers import T5Tokenizer
 from model.transformer_model import Transformer
-from miditok import REMI, TokenizerConfig
-from pathlib import Path
+from huggingface_hub import hf_hub_download
+
+repo_id = "amaai-lab/text2midi"
+# Download the model.bin file
+model_path = hf_hub_download(repo_id=repo_id, filename="pytorch_model.bin")
+# Download the vocab_remi.pkl file
+tokenizer_path = hf_hub_download(repo_id=repo_id, filename="vocab_remi.pkl")
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-artifact_folder = 'artifacts'
 
-tokenizer_filepath = os.path.join(artifact_folder, "vocab_remi.pkl")
 # Load the tokenizer dictionary
-with open(tokenizer_filepath, "rb") as f:
+with open(tokenizer_path, "rb") as f:
     r_tokenizer = pickle.load(f)
 
 # Get the vocab size
 vocab_size = len(r_tokenizer)
 print("Vocab size: ", vocab_size)
-model = Transformer(vocab_size, 768, 8, 5000, 18, 1024, False, 8, device=device)
-model.load_state_dict(torch.load('/text2midi/artifacts/pytorch_model_140.bin', map_location=device))
+model = Transformer(vocab_size, 768, 8, 2048, 18, 1024, False, 8, device=device)
+model.load_state_dict(torch.load(model_path, map_location=device))
 model.eval()
 tokenizer = T5Tokenizer.from_pretrained("google/flan-t5-base")
 
@@ -50,13 +55,12 @@ output = model.generate(input_ids, attention_mask, max_len=2000,temperature = 1.
 output_list = output[0].tolist()
 generated_midi = r_tokenizer.decode(output_list)
 generated_midi.dump_midi("output.mid")
-post_processing("output.mid", "output.mid")
 ```
 
 ## Installation
 ```bash
-git clone https://github.com/AMAAI-Lab/Text2midi
-cd Text2midi
+git clone https://github.com/AMAAI-Lab/text-2-midi
+cd text-2-midi
 pip install -r requirements.txt
 ```
 
@@ -67,26 +71,27 @@ The MidiCaps dataset is a large-scale dataset of 168k MIDI files paired with ric
 
 Each question is rated on a Likert scale from 1 (very bad) to 7 (very good). The table shows the average ratings per question for each group of participants.
 
-| **Question**        | **General Audience (MidiCaps)** | **General Audience (text2midi)** | **Music Experts (MidiCaps)** | **Music Experts (text2midi)** |
-|---------------------|---------------------------------|-----------------------------------|------------------------------|--------------------------------|
-| Overall matching    | 5.17                           | 4.12                             | 5.29                        | 4.05                          |
-| Genre matching      | 5.22                           | 4.29                             | 5.31                        | 4.29                          |
-| Mood matching       | 5.24                           | 4.10                             | 5.44                        | 4.26                          |
-| Key matching        | 4.72                           | 4.24                             | 4.63                        | 4.05                          |
-| Chord matching      | 4.65                           | 4.23                             | 4.05                        | 4.06                          |
-| Tempo matching      | 4.72                           | 4.48                             | 5.15                        | 4.90                          |
+| Question            | MidiCaps | text2midi | MuseCoco |
+|---------------------|----------|-----------|----------|
+| Musical Quality     | 5.79     | 4.62      | 4.40     |
+| Overall Matching    | 5.42     | 4.67      | 4.07     |
+| Genre Matching      | 5.54     | 4.98      | 4.40     |
+| Mood Matching       | 5.70     | 5.00      | 4.32     |
+| Key Matching        | 4.61     | 3.64      | 3.36     |
+| Chord Matching      | 3.20     | 2.50      | 2.00     |
+| Tempo Matching      | 5.89     | 5.42      | 4.94     |
 
 
 ## Objective Evaluations
 
 | Metric              | text2midi | MidiCaps | MuseCoco |
 |---------------------|-----------|----------|----------|
-| CR ↑               | 2.156     | 3.4326   | 2.1288   |
-| CLAP ↑             | 0.2204    | 0.2593   | 0.2158   |
-| TB (%) ↑           | 34.03     | -        | 21.71    |
-| TBT (%) ↑          | 66.9      | -        | 54.63    |
-| CK (%) ↑           | 15.36     | -        | 13.70    |
-| CKD (%) ↑          | 15.80     | -        | 14.59    |
+| CR ↑               | 2.14      | 3.43     | 2.12     |
+| CLAP ↑             | 0.22      | 0.26     | 0.21     |
+| TB (%) ↑           | 27.85     | -        | 21.71    |
+| TBT (%) ↑          | 57.78     | -        | 54.63    |
+| CK (%) ↑           | 7.69      | -        | 13.70    |
+| CKD (%) ↑          | 14.80     | -        | 14.59    |
 
 **Note**:  
 CR = Compression ratio  
