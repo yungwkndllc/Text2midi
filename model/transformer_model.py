@@ -1272,83 +1272,166 @@ def check_instruments(genereated_seq):
     return genereated_seq 
 
 def process_caption(gpu_id, captions, model, tokenizer, r_tokenizer):
-    device = gpu_id
-    torch.cuda.set_device(gpu_id)
-    model.to(gpu_id)
+    # Detect device: CUDA, MPS, or CPU
+    if torch.cuda.is_available():
+        device = torch.device(f"cuda:{gpu_id}")
+        torch.cuda.set_device(gpu_id)
+        print(f"Using CUDA on GPU {gpu_id}")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+        print("Using MPS on macOS")
+    else:
+        device = torch.device("cpu")
+        print("Using CPU")
+
+    # Move the model to the selected device
+    model.to(device)
     model.eval()
+
     for caption in captions:
         src = caption['caption']
         location = caption['location']
-        #src = "A cinematic electronic soundtrack that evokes an epic and dark atmosphere, featuring cello, contrabass, and drums. The song is set in A minor with a moderate tempo and a 4/4 time signature, creating an emotional and action-packed ambiance suitable for film."
-        '''
-        example 1: "A cheerful and melodic pop Christmas song featuring piano, acoustic guitar, vibraphone, bass, and drums, set in the key of Eb minor with a fast tempo of 123 bpm and a 4/4 time signature, creating a joyful and relaxing atmosphere."lmd_full/1/1b9f5f325c2080d345d877f590aa3dbe.mid
-        example 2: "A melodic electronic song with ambient elements, featuring piano, acoustic guitar, alto saxophone, string ensemble, and electric bass. Set in G minor with a 4/4 time signature, it moves at a lively Presto tempo. The composition evokes a blend of relaxation and darkness, with hints of happiness and a meditative quality."lmd_full/1/152891ac63017b234c33e75e4a4a28c5.mid
-        example 3: "This motivational electronic and pop song features a clean electric guitar, rock organ, synth voice, acoustic guitar, and vibraphone, creating a melodic and uplifting atmosphere. Set in the key of G# minor with a 4/4 time signature, the track moves at an energetic Allegro tempo of 120 beats per minute. The chord progression of Bbm7 and F# adds to the song's inspiring and corporate feel." lmd_full/1/14347e50e9e8149a9da09f49b188180b.mid
-        example 4: "This short electronic song in C minor features a brass section, string ensemble, tenor saxophone, clean electric guitar, and slap bass, creating a melodic and slightly dark atmosphere. With a tempo of 124 BPM (Allegro) and a 4/4 time signature, the track incorporates a chord progression of C7/E, Eb6, and Bbm6, adding a touch of corporate and motivational vibes to the overall composition." lmd_full/1/1dc4cd50a5509d8042d27d80bc7e668e.mid
-        example 5: "An energetic and melodic electronic trance track with a space and retro vibe, featuring drums, distortion guitar, flute, synth bass, and slap bass. Set in A minor with a fast tempo of 138 BPM, the song maintains a 4/4 time signature throughout its duration." lmd_full/3/3328b854ebe7a2fc9a746ede74c410ae.mid  
-        example 6: "A short but energetic rock fragment in C minor, featuring overdriven guitars, electric bass, and drums, with a vivacious tempo of 155 BPM and a 4/4 time signature, evoking a blend of dark and melodic tones." lmd_full/4/4c2232688c5f869b8470a408d197f5e3.mid 
-        example 7: "A classical piece with a cinematic flair, this composition is characterized by its fast tempo and 4/4 time signature. The soprano saxophone and flute take turns leading the melody, supported by the lush tones of the string ensemble, acoustic bass, and pan flute. Set in the key of F minor, the harmonic landscape is painted with the chords Gm7b5, Cm7b5, Fm7, Eaug, and Ab/Eb. The overall mood evokes images of film, with hints of Christmas, drama, documentary, and adventure." lmd_full/9/95bce1b489a11829b4fef39200291f60.mid 
-        exmaple 8: "A slow, dark, and emotional classical piece featuring cello, violin, and viola, likely to be used in a dramatic film soundtrack. The composition is in the key of C minor with a 4/4 time signature, and the main chord progression consists of Cm, G, Cm, and Fm." lmd_full/a/a22aad98ecfe4b3d8a353c2a72132834.mid
-        example 9: "A slow and emotional classical piece, likely used in a film soundtrack, featuring a church organ as the sole instrument. Written in the key of Eb major with a 3/4 time signature, it evokes a sense of drama and romance. The chord progression of Bb7, Eb, and Ab contributes to the relaxing atmosphere throughout the song." lmd_full/a/af4302a036c9df71e0435df9b08f8c4b.mid
-        example 10: "A cinematic electronic soundtrack that evokes an epic and dark atmosphere, featuring cello, contrabass, and drums. The song is set in A minor with a moderate tempo and a 4/4 time signature, creating an emotional and action-packed ambiance suitable for film." lmd_full/d/d920b6f451d7a72ae06f154e7c06c4c1.mid
-        '''
+
+        # Tokenize input
         inputs = tokenizer(src, return_tensors='pt', padding=True, truncation=True)
         input_ids = nn.utils.rnn.pad_sequence(inputs.input_ids, batch_first=True, padding_value=0)
         input_ids = input_ids.to(device)
-        attention_mask =nn.utils.rnn.pad_sequence(inputs.attention_mask, batch_first=True, padding_value=0) 
+        attention_mask = nn.utils.rnn.pad_sequence(inputs.attention_mask, batch_first=True, padding_value=0)
         attention_mask = attention_mask.to(device)
-        output = model.generate(input_ids, attention_mask,max_len=5000,temperature = 0.9)
+
+        # Generate output
+        output = model.generate(input_ids, attention_mask, max_len=5000, temperature=0.9)
         output_list = output[0].tolist()
-        print(type(output_list))
-        # generated_sequences = [dict_tokenizer[token] for token in output_list[0]]
-        # generated_sequences = check_instruments(generated_sequences)
-        # # generated_sequences = [('prefix', 'instrument', 'bass'), ('prefix', 'instrument', 'guitar'), ('prefix', 'instrument', 'piano'), ('prefix', 'instrument', 'guitar'), '<S>' ]+ generated_sequences +['<E>']
-        # generated_sequences = [token for token in generated_sequences]# if token not in ["<SS>", "<S>", "<E>", "<SEP>"]]
-        # # print("Generated sequences:", generated_sequences)
-        # with open('../../generated_seq.pkl', 'wb') as f:
-        #     pickle.dump(generated_sequences, f)
-        # mid_dict = aria_tokenizer.detokenize(generated_sequences)
-        # mid = mid_dict.to_midi()
+
+        # Decode MIDI and save it
         generated_midi = r_tokenizer.decode(output_list)
-        # print(type(generated_midi))
         generated_midi.dump_midi(f"../res/{location}")
 
+# def process_caption(gpu_id, captions, model, tokenizer, r_tokenizer):
+#     device = gpu_id
+#     torch.cuda.set_device(gpu_id)
+#     model.to(gpu_id)
+#     model.eval()
+#     for caption in captions:
+#         src = caption['caption']
+#         location = caption['location']
+#         #src = "A cinematic electronic soundtrack that evokes an epic and dark atmosphere, featuring cello, contrabass, and drums. The song is set in A minor with a moderate tempo and a 4/4 time signature, creating an emotional and action-packed ambiance suitable for film."
+#         '''
+#         example 1: "A cheerful and melodic pop Christmas song featuring piano, acoustic guitar, vibraphone, bass, and drums, set in the key of Eb minor with a fast tempo of 123 bpm and a 4/4 time signature, creating a joyful and relaxing atmosphere."lmd_full/1/1b9f5f325c2080d345d877f590aa3dbe.mid
+#         example 2: "A melodic electronic song with ambient elements, featuring piano, acoustic guitar, alto saxophone, string ensemble, and electric bass. Set in G minor with a 4/4 time signature, it moves at a lively Presto tempo. The composition evokes a blend of relaxation and darkness, with hints of happiness and a meditative quality."lmd_full/1/152891ac63017b234c33e75e4a4a28c5.mid
+#         example 3: "This motivational electronic and pop song features a clean electric guitar, rock organ, synth voice, acoustic guitar, and vibraphone, creating a melodic and uplifting atmosphere. Set in the key of G# minor with a 4/4 time signature, the track moves at an energetic Allegro tempo of 120 beats per minute. The chord progression of Bbm7 and F# adds to the song's inspiring and corporate feel." lmd_full/1/14347e50e9e8149a9da09f49b188180b.mid
+#         example 4: "This short electronic song in C minor features a brass section, string ensemble, tenor saxophone, clean electric guitar, and slap bass, creating a melodic and slightly dark atmosphere. With a tempo of 124 BPM (Allegro) and a 4/4 time signature, the track incorporates a chord progression of C7/E, Eb6, and Bbm6, adding a touch of corporate and motivational vibes to the overall composition." lmd_full/1/1dc4cd50a5509d8042d27d80bc7e668e.mid
+#         example 5: "An energetic and melodic electronic trance track with a space and retro vibe, featuring drums, distortion guitar, flute, synth bass, and slap bass. Set in A minor with a fast tempo of 138 BPM, the song maintains a 4/4 time signature throughout its duration." lmd_full/3/3328b854ebe7a2fc9a746ede74c410ae.mid  
+#         example 6: "A short but energetic rock fragment in C minor, featuring overdriven guitars, electric bass, and drums, with a vivacious tempo of 155 BPM and a 4/4 time signature, evoking a blend of dark and melodic tones." lmd_full/4/4c2232688c5f869b8470a408d197f5e3.mid 
+#         example 7: "A classical piece with a cinematic flair, this composition is characterized by its fast tempo and 4/4 time signature. The soprano saxophone and flute take turns leading the melody, supported by the lush tones of the string ensemble, acoustic bass, and pan flute. Set in the key of F minor, the harmonic landscape is painted with the chords Gm7b5, Cm7b5, Fm7, Eaug, and Ab/Eb. The overall mood evokes images of film, with hints of Christmas, drama, documentary, and adventure." lmd_full/9/95bce1b489a11829b4fef39200291f60.mid 
+#         exmaple 8: "A slow, dark, and emotional classical piece featuring cello, violin, and viola, likely to be used in a dramatic film soundtrack. The composition is in the key of C minor with a 4/4 time signature, and the main chord progression consists of Cm, G, Cm, and Fm." lmd_full/a/a22aad98ecfe4b3d8a353c2a72132834.mid
+#         example 9: "A slow and emotional classical piece, likely used in a film soundtrack, featuring a church organ as the sole instrument. Written in the key of Eb major with a 3/4 time signature, it evokes a sense of drama and romance. The chord progression of Bb7, Eb, and Ab contributes to the relaxing atmosphere throughout the song." lmd_full/a/af4302a036c9df71e0435df9b08f8c4b.mid
+#         example 10: "A cinematic electronic soundtrack that evokes an epic and dark atmosphere, featuring cello, contrabass, and drums. The song is set in A minor with a moderate tempo and a 4/4 time signature, creating an emotional and action-packed ambiance suitable for film." lmd_full/d/d920b6f451d7a72ae06f154e7c06c4c1.mid
+#         '''
+#         inputs = tokenizer(src, return_tensors='pt', padding=True, truncation=True)
+#         input_ids = nn.utils.rnn.pad_sequence(inputs.input_ids, batch_first=True, padding_value=0)
+#         input_ids = input_ids.to(device)
+#         attention_mask =nn.utils.rnn.pad_sequence(inputs.attention_mask, batch_first=True, padding_value=0) 
+#         attention_mask = attention_mask.to(device)
+#         output = model.generate(input_ids, attention_mask,max_len=5000,temperature = 0.9)
+#         output_list = output[0].tolist()
+#         print(type(output_list))
+#         # generated_sequences = [dict_tokenizer[token] for token in output_list[0]]
+#         # generated_sequences = check_instruments(generated_sequences)
+#         # # generated_sequences = [('prefix', 'instrument', 'bass'), ('prefix', 'instrument', 'guitar'), ('prefix', 'instrument', 'piano'), ('prefix', 'instrument', 'guitar'), '<S>' ]+ generated_sequences +['<E>']
+#         # generated_sequences = [token for token in generated_sequences]# if token not in ["<SS>", "<S>", "<E>", "<SEP>"]]
+#         # # print("Generated sequences:", generated_sequences)
+#         # with open('../../generated_seq.pkl', 'wb') as f:
+#         #     pickle.dump(generated_sequences, f)
+#         # mid_dict = aria_tokenizer.detokenize(generated_sequences)
+#         # mid = mid_dict.to_midi()
+#         generated_midi = r_tokenizer.decode(output_list)
+#         # print(type(generated_midi))
+#         generated_midi.dump_midi(f"../res/{location}")
+
 def test_generate():
-    device = 'cuda'
+    # Detect device: CUDA, MPS, or CPU
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+        print("Using CUDA on NVIDIA GPU")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+        print("Using MPS on macOS")
+    else:
+        device = torch.device("cpu")
+        print("Using CPU")
+
     artifact_folder = '../artifacts'
     tokenizer_filepath = os.path.join(artifact_folder, "vocab_remi.pkl")
     caption_dataset_path = '/root/captions/train.json'
     print(f'caption_dataset_path: {caption_dataset_path}')
-# Load the tokenizer dictionary
+
+    # Load the tokenizer dictionary
     with open(tokenizer_filepath, "rb") as f:
         r_tokenizer = pickle.load(f)
-    vocab_size = len(r_tokenizer)#+1
+    vocab_size = len(r_tokenizer)  # +1
     print("Vocab size: ", vocab_size)
-    # print(tokenizer[2171])
-    # d_model =
-    # model = Transformer(vocab_size, 768, 8, 8000, 8, 1024, False, 8, device=device)
+
+    # Initialize model
     model = Transformer(vocab_size, 768, 8, 2048, 18, 1024, False, 8, device=device)
-    # model = DataParallel(model)
     model.load_state_dict(torch.load('/root/output_test_new/epoch_30/pytorch_model.bin', map_location=device))
+    model.to(device)  # Move model to detected device
     model.eval()
+
+    # Prepare input
     tokenizer = T5Tokenizer.from_pretrained("google/flan-t5-base")
     src = "A pop song with nostalgic feeling."
-    # src = "A melodic electronic song with ambient elements, featuring piano, acoustic guitar, alto saxophone, string ensemble, and electric bass. Set in G minor with a 4/4 time signature, it moves at a lively Presto tempo. The composition evokes a blend of relaxation and darkness, with hints of happiness and a meditative quality."
-    # src="An energetic and melodic electronic trance track with a space and retro vibe, featuring drums, distortion guitar, flute, synth bass, and slap bass. Set in A minor with a fast tempo of 138 BPM, the song maintains a 4/4 time signature throughout its duration."
-    # src="A cheerful and melodic pop Christmas song featuring piano, acoustic guitar, vibraphone, bass, and drums, set in the key of Eb minor with a fast tempo of 123 bpm and a 4/4 time signature, creating a joyful and relaxing atmosphere."
-    # src = "This short electronic song in C minor features a brass section, string ensemble, tenor saxophone, clean electric guitar, and slap bass, creating a melodic and slightly dark atmosphere. With a tempo of 124 BPM (Allegro) and a 4/4 time signature, the track incorporates a chord progression of C7/E, Eb6, and Bbm6, adding a touch of corporate and motivational vibes to the overall composition."
-    # src="This motivational electronic and pop song features a clean electric guitar, rock organ, synth voice, acoustic guitar, and vibraphone, creating a melodic and uplifting atmosphere. Set in the key of G# minor with a 4/4 time signature, the track moves at an energetic Allegro tempo of 120 beats per minute. The chord progression of Bbm7 and F# adds to the song's inspiring and corporate feel."
-    # src = "Played at 149 beats per minute in 2/4 time signature and the key of G major, classical piece with instruments: bassoon, clarinet, flute, horn, oboe, and trumpet."
-    # src= 'Played at 114 beats per minute in 1/4 time signature and the key of g# minor, classical piece with the following instruments: clarinet, english horn, flute, horn, piccolo, trombone, and trumpet.'
     inputs = tokenizer(src, return_tensors='pt', padding=True, truncation=True)
     input_ids = nn.utils.rnn.pad_sequence(inputs.input_ids, batch_first=True, padding_value=0)
     input_ids = input_ids.to(device)
-    attention_mask =nn.utils.rnn.pad_sequence(inputs.attention_mask, batch_first=True, padding_value=0) 
+    attention_mask = nn.utils.rnn.pad_sequence(inputs.attention_mask, batch_first=True, padding_value=0)
     attention_mask = attention_mask.to(device)
-    output = model.generate(input_ids, attention_mask,max_len=5000,temperature = 0.9)
+
+    # Generate output
+    output = model.generate(input_ids, attention_mask, max_len=5000, temperature=0.9)
     output_list = output[0].tolist()
+
+    # Decode and save MIDI
     generated_midi = r_tokenizer.decode(output_list)
     generated_midi.dump_midi(f"../../output_free_p.mid")
+
+
+# def test_generate():
+#     device = 'cuda'
+#     artifact_folder = '../artifacts'
+#     tokenizer_filepath = os.path.join(artifact_folder, "vocab_remi.pkl")
+#     caption_dataset_path = '/root/captions/train.json'
+#     print(f'caption_dataset_path: {caption_dataset_path}')
+# # Load the tokenizer dictionary
+#     with open(tokenizer_filepath, "rb") as f:
+#         r_tokenizer = pickle.load(f)
+#     vocab_size = len(r_tokenizer)#+1
+#     print("Vocab size: ", vocab_size)
+#     # print(tokenizer[2171])
+#     # d_model =
+#     # model = Transformer(vocab_size, 768, 8, 8000, 8, 1024, False, 8, device=device)
+#     model = Transformer(vocab_size, 768, 8, 2048, 18, 1024, False, 8, device=device)
+#     # model = DataParallel(model)
+#     model.load_state_dict(torch.load('/root/output_test_new/epoch_30/pytorch_model.bin', map_location=device))
+#     model.eval()
+#     tokenizer = T5Tokenizer.from_pretrained("google/flan-t5-base")
+#     src = "A pop song with nostalgic feeling."
+#     # src = "A melodic electronic song with ambient elements, featuring piano, acoustic guitar, alto saxophone, string ensemble, and electric bass. Set in G minor with a 4/4 time signature, it moves at a lively Presto tempo. The composition evokes a blend of relaxation and darkness, with hints of happiness and a meditative quality."
+#     # src="An energetic and melodic electronic trance track with a space and retro vibe, featuring drums, distortion guitar, flute, synth bass, and slap bass. Set in A minor with a fast tempo of 138 BPM, the song maintains a 4/4 time signature throughout its duration."
+#     # src="A cheerful and melodic pop Christmas song featuring piano, acoustic guitar, vibraphone, bass, and drums, set in the key of Eb minor with a fast tempo of 123 bpm and a 4/4 time signature, creating a joyful and relaxing atmosphere."
+#     # src = "This short electronic song in C minor features a brass section, string ensemble, tenor saxophone, clean electric guitar, and slap bass, creating a melodic and slightly dark atmosphere. With a tempo of 124 BPM (Allegro) and a 4/4 time signature, the track incorporates a chord progression of C7/E, Eb6, and Bbm6, adding a touch of corporate and motivational vibes to the overall composition."
+#     # src="This motivational electronic and pop song features a clean electric guitar, rock organ, synth voice, acoustic guitar, and vibraphone, creating a melodic and uplifting atmosphere. Set in the key of G# minor with a 4/4 time signature, the track moves at an energetic Allegro tempo of 120 beats per minute. The chord progression of Bbm7 and F# adds to the song's inspiring and corporate feel."
+#     # src = "Played at 149 beats per minute in 2/4 time signature and the key of G major, classical piece with instruments: bassoon, clarinet, flute, horn, oboe, and trumpet."
+#     # src= 'Played at 114 beats per minute in 1/4 time signature and the key of g# minor, classical piece with the following instruments: clarinet, english horn, flute, horn, piccolo, trombone, and trumpet.'
+#     inputs = tokenizer(src, return_tensors='pt', padding=True, truncation=True)
+#     input_ids = nn.utils.rnn.pad_sequence(inputs.input_ids, batch_first=True, padding_value=0)
+#     input_ids = input_ids.to(device)
+#     attention_mask =nn.utils.rnn.pad_sequence(inputs.attention_mask, batch_first=True, padding_value=0) 
+#     attention_mask = attention_mask.to(device)
+#     output = model.generate(input_ids, attention_mask,max_len=5000,temperature = 0.9)
+#     output_list = output[0].tolist()
+#     generated_midi = r_tokenizer.decode(output_list)
+#     generated_midi.dump_midi(f"../../output_free_p.mid")
     
 if __name__ == "__main__":
     # mp.set_start_method('spawn')
