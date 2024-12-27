@@ -93,12 +93,12 @@ Each question is rated on a Likert scale from 1 (very bad) to 7 (very good). The
 
 | Metric              | text2midi | MidiCaps | MuseCoco |
 |---------------------|-----------|----------|----------|
-| CR ↑               | 2.14      | 3.43     | 2.12     |
+| CR ↑               | 2.31      | 3.43     | 2.12     |
 | CLAP ↑             | 0.22      | 0.26     | 0.21     |
-| TB (%) ↑           | 27.85     | -        | 21.71    |
-| TBT (%) ↑          | 57.78     | -        | 54.63    |
-| CK (%) ↑           | 7.69      | -        | 13.70    |
-| CKD (%) ↑          | 14.80     | -        | 14.59    |
+| TB (%) ↑           | 39.70     | -        | 21.71    |
+| TBT (%) ↑          | 65.80     | -        | 54.63    |
+| CK (%) ↑           | 33.60     | -        | 13.70    |
+| CKD (%) ↑          | 35.60     | -        | 14.59    |
 
 **Note**:  
 CR = Compression ratio  
