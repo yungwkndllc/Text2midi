@@ -25,8 +25,8 @@ from transformers import T5Tokenizer
 from model.transformer_model import Transformer
 from huggingface_hub import hf_hub_download
 
-repo_id = "amaai-lab/text2midi"
 # Download the model.bin file
+repo_id = "amaai-lab/text2midi"
 model_path = hf_hub_download(repo_id=repo_id, filename="pytorch_model.bin")
 # Download the vocab_remi.pkl file
 tokenizer_path = hf_hub_download(repo_id=repo_id, filename="vocab_remi.pkl")
@@ -45,12 +45,15 @@ model.load_state_dict(torch.load(model_path, map_location=device))
 model.eval()
 tokenizer = T5Tokenizer.from_pretrained("google/flan-t5-base")
 
+# Enter the text prompt and tokenize it
 src = "A melodic electronic song with ambient elements, featuring piano, acoustic guitar, alto saxophone, string ensemble, and electric bass. Set in G minor with a 4/4 time signature, it moves at a lively Presto tempo. The composition evokes a blend of relaxation and darkness, with hints of happiness and a meditative quality."
 inputs = tokenizer(src, return_tensors='pt', padding=True, truncation=True)
 input_ids = nn.utils.rnn.pad_sequence(inputs.input_ids, batch_first=True, padding_value=0)
 input_ids = input_ids.to(device)
 attention_mask =nn.utils.rnn.pad_sequence(inputs.attention_mask, batch_first=True, padding_value=0) 
 attention_mask = attention_mask.to(device)
+
+# Generate the midi
 output = model.generate(input_ids, attention_mask, max_len=2000,temperature = 1.0)
 output_list = output[0].tolist()
 generated_midi = r_tokenizer.decode(output_list)
@@ -58,6 +61,7 @@ generated_midi.dump_midi("output.mid")
 ```
 
 ## Installation
+
 If you have CUDA supported machine:
 ```bash
 git clone https://github.com/AMAAI-Lab/text-2-midi
@@ -72,7 +76,20 @@ pip install -r requirements-mac.txt
 ```
 
 ## Datasets
-The MidiCaps dataset is a large-scale dataset of 168k MIDI files paired with rich text captions. These captions contain musical attributes such as key, tempo, style, and mood, making it ideal for text-to-MIDI generation tasks.
+
+The [MidiCaps dataset](https://huggingface.co/datasets/amaai-lab/MidiCaps) is a large-scale dataset of 168k MIDI files paired with rich text captions. These captions contain musical attributes such as key, tempo, style, and mood, making it ideal for text-to-MIDI generation tasks as described in [this paper](https://arxiv.org/abs/2406.02255). 
+
+
+## Citation
+If you use text2midi in your research, please cite:
+```
+@inproceedings{bhandari2025text2midi,
+    title={text2midi: Generating Symbolic Music from Captions}, 
+    author={Keshav Bhandari and Abhinaba Roy and Kyra Wang and Geeta Puri and Simon Colton and Dorien Herremans},
+    booktitle={Proceedings of the 39th AAAI Conference on Artificial Intelligence (AAAI 2025)},
+    year={2025}
+}
+```
 
 ## Results of the Listening Study
 
@@ -128,18 +145,9 @@ accelerate launch train.py \
 ```
 
 ## Inference
-We spport inference on CUDA, MPS and cpu. Please make sure you have pip installed the correct requirement file (requirments.txt for CUDA, requirements-mac.txt for MPS)
+We support inference on CUDA, MPS and cpu. Please make sure you have pip installed the correct requirement file (requirments.txt for CUDA, requirements-mac.txt for MPS)
 ```bash
 python model/transformer_model.py --caption <your intended descriptions>
 ```
 
-## Citation
-If you use text2midi in your research, please cite:
-```
-@inproceedings{bhandari2025text2midi,
-    title={text2midi: Generating Symbolic Music from Captions}, 
-    author={Keshav Bhandari and Abhinaba Roy and Kyra Wang and Geeta Puri and Simon Colton and Dorien Herremans},
-    booktitle={Proceedings of the 39th AAAI Conference on Artificial Intelligence (AAAI 2025)},
-    year={2025}
-}
-```
+
