@@ -64,13 +64,13 @@ generated_midi.dump_midi("output.mid")
 
 If you have CUDA supported machine:
 ```bash
-git clone https://github.com/AMAAI-Lab/text-2-midi
+git clone https://github.com/AMAAI-Lab/text2midi
 cd text-2-midi
 pip install -r requirements.txt
 ```
 Alternatively, if you have MPS supported machine:
 ```bash
-git clone https://github.com/AMAAI-Lab/text-2-midi
+git clone https://github.com/AMAAI-Lab/text2midi
 cd text-2-midi
 pip install -r requirements-mac.txt
 ```
