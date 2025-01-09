@@ -108,6 +108,7 @@ Each question is rated on a Likert scale from 1 (very bad) to 7 (very good). The
 
 
 ## Objective Evaluations
+Results of objective evaluation for *all* of MidiCaps test set. Please not we have improved from all the numbers written in the paper (the numbers in paper are on a small subset of MidiCaps test set). 
 
 | Metric              | text2midi | MidiCaps | MuseCoco |
 |---------------------|-----------|----------|----------|
