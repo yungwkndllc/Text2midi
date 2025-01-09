@@ -25,13 +25,20 @@ from transformers import T5Tokenizer
 from model.transformer_model import Transformer
 from huggingface_hub import hf_hub_download
 
-# Download the model.bin file
 repo_id = "amaai-lab/text2midi"
+# Download the model.bin file
 model_path = hf_hub_download(repo_id=repo_id, filename="pytorch_model.bin")
 # Download the vocab_remi.pkl file
 tokenizer_path = hf_hub_download(repo_id=repo_id, filename="vocab_remi.pkl")
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+if torch.cuda.is_available():
+    device = 'cuda'
+elif torch.backends.mps.is_available():
+    device = 'mps'
+else:
+    device = 'cpu'
+
+print(f"Using device: {device}")
 
 # Load the tokenizer dictionary
 with open(tokenizer_path, "rb") as f:
@@ -45,8 +52,13 @@ model.load_state_dict(torch.load(model_path, map_location=device))
 model.eval()
 tokenizer = T5Tokenizer.from_pretrained("google/flan-t5-base")
 
+print('Model loaded.')
+
+
 # Enter the text prompt and tokenize it
 src = "A melodic electronic song with ambient elements, featuring piano, acoustic guitar, alto saxophone, string ensemble, and electric bass. Set in G minor with a 4/4 time signature, it moves at a lively Presto tempo. The composition evokes a blend of relaxation and darkness, with hints of happiness and a meditative quality."
+print('Generating for prompt: ' + src)
+
 inputs = tokenizer(src, return_tensors='pt', padding=True, truncation=True)
 input_ids = nn.utils.rnn.pad_sequence(inputs.input_ids, batch_first=True, padding_value=0)
 input_ids = input_ids.to(device)
