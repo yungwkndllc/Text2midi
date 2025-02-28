@@ -150,14 +150,7 @@ accelerate config
 
 Then, use the following command to start training:
 ```bash
-accelerate launch train.py \
---encoder_model="google/flan-t5-large" \
---decoder_model="configs/transformer_decoder_config.json" \
---dataset_name="amaai-lab/MidiCaps" \
---pretrain_dataset="amaai-lab/SymphonyNet" \
---batch_size=16 \
---learning_rate=1e-4 \
---epochs=40 \
+accelerate launch --multi_gpu --num_processes=4 train_accelerate.py --config ../config.yaml
 ```
 
 ## Inference
