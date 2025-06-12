@@ -256,50 +256,14 @@ class MultiHeadSelfAttention(nn.Module):
 
 
 class Transformer(Module):
-    r"""A transformer model.
-
-    User is able to modify the attributes as needed. The architecture
-    is based on the paper "Attention Is All You Need". Ashish Vaswani, Noam Shazeer,
-    Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez, Lukasz Kaiser, and
-    Illia Polosukhin. 2017. Attention is all you need. In Advances in Neural Information
-    Processing Systems, pages 6000-6010.
-
-    Args:
-        d_model: the number of expected features in the encoder/decoder inputs (default=512).
-        nhead: the number of heads in the multiheadattention models (default=8).
-        num_encoder_layers: the number of sub-encoder-layers in the encoder (default=6).
-        num_decoder_layers: the number of sub-decoder-layers in the decoder (default=6).
-        dim_feedforward: the dimension of the feedforward network model (default=2048).
-        use_moe: if True, use MoE instead of linear layer for feedforward network (default=False).
-        dropout: the dropout value (default=0.1).
-        activation: the activation function of encoder/decoder intermediate layer, can be a string
-            ("relu" or "gelu") or a unary callable. Default: relu
-        custom_encoder: custom encoder (default=None).
-        custom_decoder: custom decoder (default=None).
-        layer_norm_eps: the eps value in layer normalization components (default=1e-5).
-        batch_first: If ``True``, then the input and output tensors are provided
-            as (batch, seq, feature). Default: ``False`` (seq, batch, feature).
-        norm_first: if ``True``, encoder and decoder layers will perform LayerNorms before
-            other attention and feedforward operations, otherwise after. Default: ``False`` (after).
-        bias: If set to ``False``, ``Linear`` and ``LayerNorm`` layers will not learn an additive
-            bias. Default: ``True``.
-
-    Examples::
-        >>> transformer_model = nn.Transformer(nhead=16, num_encoder_layers=12)
-        >>> src = torch.rand((32, 512))
-        >>> tgt = torch.rand((32, 512, 30000))
-        >>> out = transformer_model(src, tgt)
-
-    Note: A full example to apply nn.Transformer module for the word language model is available in
-    https://github.com/pytorch/examples/tree/master/word_language_model
-    """
+    # [class docstring omitted for brevity]
 
     def __init__(self, n_vocab: int = 30000, d_model: int = 512, nhead: int = 8, max_len: int = 5000,
                  num_decoder_layers: int = 6, dim_feedforward: int = 2048, use_moe: bool = False, 
                  num_experts: int = 16, dropout: float = 0.1, 
                  activation: Union[str, Callable[[Tensor], Tensor]] = F.relu,
                  layer_norm_eps: float = 1e-5, batch_first: bool = True, norm_first: bool = False,
-                 bias: bool = True, device=None, dtype=None) -> None:
+                 bias: bool = True, device=None, dtype=None) -> None: 
         factory_kwargs = {'device': device, 'dtype': dtype}
         super().__init__()
         torch._C._log_api_usage_once(f"torch.nn.modules.{self.__class__.__name__}")
@@ -309,9 +273,7 @@ class Transformer(Module):
         self.input_emb = nn.Embedding(n_vocab, d_model, **factory_kwargs)
         self.pos_encoder = PositionalEncoding(d_model, dropout, max_len).to(device)
 
-        # Load the FLAN-T5 encoder
         self.encoder = T5EncoderModel.from_pretrained("google/flan-t5-base").to(device)
-        # Freeze the encoder
         for param in self.encoder.parameters():
             param.requires_grad = False
 
@@ -327,79 +289,12 @@ class Transformer(Module):
 
         self.d_model = d_model
         self.nhead = nhead
-
         self.batch_first = batch_first
 
     def forward(self, src: Tensor, src_mask: Tensor, tgt: Tensor, memory_mask: Optional[Tensor] = None,
                 memory_key_padding_mask: Optional[Tensor] = None, tgt_is_causal: bool = True,
                 memory_is_causal: bool = False) -> Tensor:
-        r"""Take in and process masked source/target sequences.
 
-        .. note::
-
-            If a boolean tensor is provided for any of the [src/tgt/memory]_mask arguments, positions with a ``True`` value are
-            not allowed to participate in the attention,
-            which is the opposite of the definition for :attr:`attn_mask`
-            in :func:`torch.nn.functional.scaled_dot_product_attention`.
-
-        Args:
-            src: the sequence to the encoder (required).
-            src_attn_mask: the attention mask for the src sequence (required).
-            tgt: the sequence to the decoder (required).
-            tgt_mask: the additive mask for the tgt sequence (optional).
-            memory_mask: the additive mask for the encoder output (optional).
-            tgt_key_padding_mask: the Tensor mask for tgt keys per batch (optional).
-            memory_key_padding_mask: the Tensor mask for memory keys per batch (optional).
-            tgt_is_causal: If specified, applies a causal mask as ``tgt_mask``.
-                Default: ``None``; try to detect a causal mask.
-                Warning:
-                ``tgt_is_causal`` provides a hint that ``tgt_mask`` is
-                the causal mask. Providing incorrect hints can result in
-                incorrect execution, including forward and backward
-                compatibility.
-            memory_is_causal: If specified, applies a causal mask as
-                ``memory_mask``.
-                Default: ``False``.
-                Warning:
-                ``memory_is_causal`` provides a hint that
-                ``memory_mask`` is the causal mask. Providing incorrect
-                hints can result in incorrect execution, including
-                forward and backward compatibility.
-
-        Shape:
-            - src: :math:`(S, S)` for unbatched input, :math:`(S, N)` if `batch_first=False` or
-              `(N, S)` if `batch_first=True`.
-            - src_mask: :math:`(S, S)` or :math:`(N\cdot\text{num\_heads}, S, S)`.
-            - tgt: :math:`(T, E)` for unbatched input, :math:`(T, N, E)` if `batch_first=False` or
-              `(N, T, E)` if `batch_first=True`.
-            - tgt_mask: :math:`(T, T)` or :math:`(N\cdot\text{num\_heads}, T, T)`.
-            - memory_mask: :math:`(T, S)`.
-            - src_key_padding_mask: :math:`(S)` for unbatched input otherwise :math:`(N, S)`.
-            - tgt_key_padding_mask: :math:`(T)` for unbatched input otherwise :math:`(N, T)`.
-            - memory_key_padding_mask: :math:`(S)` for unbatched input otherwise :math:`(N, S)`.
-
-            Note: [src/tgt/memory]_mask ensures that position :math:`i` is allowed to attend the unmasked
-            positions. If a BoolTensor is provided, positions with ``True``
-            are not allowed to attend while ``False`` values will be unchanged. If a FloatTensor
-            is provided, it will be added to the attention weight.
-            [src/tgt/memory]_key_padding_mask provides specified elements in the key to be ignored by
-            the attention. If a BoolTensor is provided, the positions with the
-            value of ``True`` will be ignored while the position with the value of ``False`` will be unchanged.
-
-            - output: :math:`(T, E)` for unbatched input, :math:`(T, N, E)` if `batch_first=False` or
-              `(N, T, E)` if `batch_first=True`.
-
-            Note: Due to the multi-head attention architecture in the transformer model,
-            the output sequence length of a transformer is same as the input sequence
-            (i.e. target) length of the decoder.
-
-            where :math:`S` is the source sequence length, :math:`T` is the target sequence length, :math:`N` is the
-            batch size, :math:`E` is the feature number
-
-        Examples:
-            >>> # xdoctest: +SKIP
-            >>> output = transformer_model(src, tgt, src_mask=src_mask)
-        """
         if src.dim() != tgt.dim():
             raise RuntimeError("the number of dimensions in src and tgt must be equal")
 
@@ -407,81 +302,71 @@ class Transformer(Module):
 
         tgt = self.input_emb(tgt) * math.sqrt(self.d_model)
         tgt = self.pos_encoder(tgt)
-        # tgt = tgt + tgt_pos
-        
+
         if self.use_moe:
-            with torch.cuda.amp.autocast(enabled =False):
-                output, sum_total_aux_loss = self.decoder(tgt, memory, memory_mask=memory_mask,                                
-                                    memory_key_padding_mask=memory_key_padding_mask,
-                                    tgt_is_causal=tgt_is_causal, memory_is_causal=memory_is_causal)
+            with torch.cuda.amp.autocast(enabled=False):
+                output, sum_total_aux_loss = self.decoder(tgt, memory, memory_mask=memory_mask, 
+                                                           memory_key_padding_mask=memory_key_padding_mask,
+                                                           tgt_is_causal=tgt_is_causal, memory_is_causal=memory_is_causal)
         else:
-            output = self.decoder(tgt, memory, memory_mask=memory_mask,                                
-                                memory_key_padding_mask=memory_key_padding_mask,
-                                tgt_is_causal=tgt_is_causal, memory_is_causal=memory_is_causal)
-        
+            output = self.decoder(tgt, memory, memory_mask=memory_mask, 
+                                  memory_key_padding_mask=memory_key_padding_mask,
+                                  tgt_is_causal=tgt_is_causal, memory_is_causal=memory_is_causal)
+
         output = self.projection(output)
-        # output = F.log_softmax(output, dim=-1)
 
         if self.use_moe:
             return output, sum_total_aux_loss
         else:
             return output
-        
+
+    def prepare_inputs_for_generation(self, input_ids, past_key_values=None, attention_mask=None, encoder_outputs=None, **kwargs):
+        if past_key_values is not None:
+            input_ids = input_ids[:, -1:]
+
+        return {
+            "src": encoder_outputs["last_hidden_state"],
+            "src_mask": attention_mask,
+            "tgt": input_ids,
+            "memory_mask": None,
+            "memory_key_padding_mask": None,
+            "tgt_is_causal": True,
+            "memory_is_causal": False,
+            "past_key_values": past_key_values,
+            "encoder_outputs": encoder_outputs
+        }
+
     def generate(self, src: Tensor, src_mask: Tensor, max_len: int = 100, temperature: float = 1.0):
-        ## ADD A START OF SEQUENCE TOKEN  <SS> token to the src tensor
-        r"""Generate a sequence of tokens from the given inputs.
-
-        Args:
-            src: the sequence to the encoder (required).
-            src_mask: the attention mask for the src sequence (required).
-            max_len: the maximum length of the sequence to generate (default=100).
-            temperature: the temperature for the softmax (default=1.0).
-
-        Returns:
-            torch.Tensor: The generated sequence of tokens.
-
-        """
         if src.dim() != 2:
             raise RuntimeError("The src tensor should be 2-dimensional")
+
         tgt_fin = torch.full((src.size(0), 1), 1, dtype=torch.long, device=src.device)
-        # values = [21631, 8, 10, 9, 6, 7, 17, 21632, 11474, 20626, 21151, 9426, 20627, 21143, 11476, 20640, 21143, 11477, 20655, 21145, 11476, 20669, 21145, 11477, 20683, 21145, 13527, 20697, 21146, 13529, 20712, 21145, 7013, 20769, 21143, 7006, 20769, 21143, 7006, 20769, 21141, 7009, 20769, 21143, 9426, 20797, 21144, 11474, 20797, 21173, 11476, 20812, 21144, 11477, 20826, 21145, 11476, 20840, 21145, 11477, 20855, 21145, 13527, 20869, 21144, 13529, 20883, 21143, 7006, 20940, 21139, 7013, 20940, 21140, 7006, 20940, 21147, 7009, 20940, 21147, 11474, 20969, 21144, 11474, 20969, 21170, 11476, 20983, 21144, 11477, 20997, 21145, 11476, 21012, 21144, 11477, 21026, 21144, 11479, 21040]
-        # values_tensor = torch.tensor(values, dtype=torch.long, device=src.device)
-        # tgt_fin = values_tensor.unsqueeze(0).repeat(src.size(0), 1)
+
         for i in tqdm(range(max_len)):
-            max_index = tgt_fin.max()
-            # assert max_index < 21634, "tgt_fin contains index out of range. Adjust n_vocab or fix tgt_fin indices."
             tgt = tgt_fin
             if self.use_moe:
-                output, _ = self.froward(src, src_mask, tgt, memory_mask=None,                                
-                                memory_key_padding_mask=None,
-                                tgt_is_causal=True, memory_is_causal=False)
+                output, _ = self.forward(src, src_mask, tgt, memory_mask=None, 
+                                         memory_key_padding_mask=None,
+                                         tgt_is_causal=True, memory_is_causal=False)
             else:
-                output = self.forward(src, src_mask, tgt, memory_mask=None,                                
+                output = self.forward(src, src_mask, tgt, memory_mask=None, 
                                       memory_key_padding_mask=None,
-                                      tgt_is_causal=True, memory_is_causal=False)          
-            # logits = self.projection(output)
+                                      tgt_is_causal=True, memory_is_causal=False)
+
             logits = output
-            output = F.log_softmax(logits/temperature, dim=-1)
+            output = F.log_softmax(logits / temperature, dim=-1)
             output = output.view(-1, output.size(-1))
-            next_tokens = torch.multinomial(torch.exp(output), 1)[-1] # taking the last logit and adding to the sequence
+            next_tokens = torch.multinomial(torch.exp(output), 1)[-1]
             tgt_fin = torch.cat((tgt_fin, next_tokens.unsqueeze(-1)), dim=1)
+
         return tgt_fin[:, 1:]
 
     @staticmethod
-    def generate_square_subsequent_mask(
-            sz: int,
-            device: Optional[torch.device] = None,
-            dtype: Optional[torch.dtype] = None,
-    ) -> Tensor:
-        r"""Generate a square causal mask for the sequence.
-
-        The masked positions are filled with float('-inf'). Unmasked positions are filled with float(0.0).
-        """
+    def generate_square_subsequent_mask(sz: int, device: Optional[torch.device] = None,
+                                        dtype: Optional[torch.dtype] = None,) -> Tensor:
         return _generate_square_subsequent_mask(sz, dtype=dtype, device=device)
 
-
     def _reset_parameters(self):
-        r"""Initiate parameters in the transformer model."""
         for p in self.parameters():
             if p.dim() > 1:
                 xavier_uniform_(p)
