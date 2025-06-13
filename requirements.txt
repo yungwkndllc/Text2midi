@@ -310,7 +310,8 @@ tomli==2.0.1
     #   thinc
     #   torch
     #   typer
-torch==2.5.1
+# torch CPU-only - install manually after requirements.txt
+
     # via -r requirements.in
 torchmetrics==1.1.0
     # via -r requirements.in
