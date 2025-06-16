@@ -241,7 +241,7 @@ class MultiHeadSelfAttention(nn.Module):
         self.heads = num_heads
         hidden_dim = self.dim_head * num_heads
         self.to_qkv = LoRALinear(embed_dim, hidden_dim * 3, r=8, alpha=16, dropout=0.05)
-        self.to_out = nn.Linear(hidden_dim, embed_dim, bias=False, **factory_kwargs)
+        self.to_out = LoRALinear(hidden_dim, embed_dim, bias=False, **factory_kwargs)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x: torch.Tensor, is_causal: bool = True) -> torch.Tensor:
