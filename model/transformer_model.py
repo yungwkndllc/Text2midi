@@ -182,6 +182,27 @@ def apply_rotary_emb(x: torch.Tensor, freqs_cis: torch.Tensor) -> torch.Tensor:
     return x
 
 
+class LoRALinear(nn.Module):
+    def __init__(self, in_features, out_features, r=4, alpha=1.0, dropout=0.0, bias=False):
+        super().__init__()
+        self.r = r
+        self.alpha = alpha
+        self.dropout = nn.Dropout(p=dropout)
+
+        self.weight = nn.Parameter(torch.randn(out_features, in_features) * 0.02)
+        self.lora_A = nn.Parameter(torch.randn(r, in_features) * 0.01)
+        self.lora_B = nn.Parameter(torch.randn(out_features, r) * 0.01)
+
+        self.scaling = self.alpha / self.r
+        self.bias = nn.Parameter(torch.zeros(out_features)) if bias else None
+
+    def forward(self, x):
+        base = torch.nn.functional.linear(x, self.weight, self.bias)
+        lora = self.dropout(x) @ self.lora_A.T
+        lora = lora @ self.lora_B.T
+        return base + self.scaling * lora
+
+
 class MultiHeadSelfAttention(nn.Module):
     r"""Multi-head self-attention module.
 
@@ -219,7 +240,7 @@ class MultiHeadSelfAttention(nn.Module):
         self.scale = self.dim_head ** -0.5
         self.heads = num_heads
         hidden_dim = self.dim_head * num_heads
-        self.to_qkv = nn.Linear(embed_dim, hidden_dim * 3, bias=False, **factory_kwargs)
+        self.to_qkv = LoRALinear(embed_dim, hidden_dim * 3, r=8, alpha=16, dropout=0.05)
         self.to_out = nn.Linear(hidden_dim, embed_dim, bias=False, **factory_kwargs)
         self.dropout = nn.Dropout(dropout)
 
