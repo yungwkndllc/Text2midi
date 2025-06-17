@@ -183,7 +183,7 @@ def apply_rotary_emb(x: torch.Tensor, freqs_cis: torch.Tensor) -> torch.Tensor:
 
 
 class LoRALinear(nn.Module):
-    def __init__(self, in_features, out_features, r=4, alpha=1.0, dropout=0.0, bias=True, **kwargs):
+    def __init__(self, in_features, out_features, r=4, alpha=1.0, dropout=0.0, bias=True, device=None, dtype=None):
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
@@ -191,22 +191,27 @@ class LoRALinear(nn.Module):
         self.alpha = alpha
         self.dropout = nn.Dropout(dropout)
 
-        self.weight = nn.Parameter(torch.randn(out_features, in_features) * 0.02)
+        # Base weight
+        self.weight = nn.Parameter(torch.empty(out_features, in_features, device=device, dtype=dtype))
+        nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+
+        # Optional bias
         if bias:
-            self.bias = nn.Parameter(torch.zeros(out_features))
+            self.bias = nn.Parameter(torch.zeros(out_features, device=device, dtype=dtype))
         else:
             self.register_parameter("bias", None)
 
         # LoRA adapters
-        self.lora_A = nn.Parameter(torch.randn(r, in_features) * 0.02)
-        self.lora_B = nn.Parameter(torch.randn(out_features, r) * 0.02)
+        self.lora_A = nn.Parameter(torch.empty(r, in_features, device=device, dtype=dtype))
+        self.lora_B = nn.Parameter(torch.empty(out_features, r, device=device, dtype=dtype))
+        nn.init.kaiming_uniform_(self.lora_A, a=math.sqrt(5))
+        nn.init.zeros_(self.lora_B)
 
     def forward(self, x):
         original = F.linear(x, self.weight, self.bias)
         lora = self.dropout(F.linear(x, self.lora_A.T))
         lora = F.linear(lora, self.lora_B) * (self.alpha / self.r)
         return original + lora
-
 
 
 class MultiHeadSelfAttention(nn.Module):
