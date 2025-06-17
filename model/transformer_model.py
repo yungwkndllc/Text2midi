@@ -183,24 +183,30 @@ def apply_rotary_emb(x: torch.Tensor, freqs_cis: torch.Tensor) -> torch.Tensor:
 
 
 class LoRALinear(nn.Module):
-    def __init__(self, in_features, out_features, r=4, alpha=1.0, dropout=0.0, bias=False):
+    def __init__(self, in_features, out_features, r=4, alpha=1.0, dropout=0.0, bias=True, **kwargs):
         super().__init__()
+        self.in_features = in_features
+        self.out_features = out_features
         self.r = r
         self.alpha = alpha
-        self.dropout = nn.Dropout(p=dropout)
+        self.dropout = nn.Dropout(dropout)
 
         self.weight = nn.Parameter(torch.randn(out_features, in_features) * 0.02)
-        self.lora_A = nn.Parameter(torch.randn(r, in_features) * 0.01)
-        self.lora_B = nn.Parameter(torch.randn(out_features, r) * 0.01)
+        if bias:
+            self.bias = nn.Parameter(torch.zeros(out_features))
+        else:
+            self.register_parameter("bias", None)
 
-        self.scaling = self.alpha / self.r
-        self.bias = nn.Parameter(torch.zeros(out_features)) if bias else None
+        # LoRA adapters
+        self.lora_A = nn.Parameter(torch.randn(r, in_features) * 0.02)
+        self.lora_B = nn.Parameter(torch.randn(out_features, r) * 0.02)
 
     def forward(self, x):
-        base = torch.nn.functional.linear(x, self.weight, self.bias)
-        lora = self.dropout(x) @ self.lora_A.T
-        lora = lora @ self.lora_B.T
-        return base + self.scaling * lora
+        original = F.linear(x, self.weight, self.bias)
+        lora = self.dropout(F.linear(x, self.lora_A.T))
+        lora = F.linear(lora, self.lora_B) * (self.alpha / self.r)
+        return original + lora
+
 
 
 class MultiHeadSelfAttention(nn.Module):
