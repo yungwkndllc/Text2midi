@@ -190,18 +190,15 @@ class LoRALinear(nn.Module):
         self.alpha = alpha
         self.dropout = nn.Dropout(dropout)
 
-        # Base weight (standard linear layer)
         self.weight = nn.Parameter(torch.randn(out_features, in_features) * 0.02)
         if bias:
             self.bias = nn.Parameter(torch.zeros(out_features))
         else:
             self.register_parameter("bias", None)
 
-        # LoRA adapters
-        self.lora_A = nn.Parameter(torch.randn(r, in_features, device=device) * 0.02)
-        self.lora_B = nn.Parameter(torch.randn(out_features, r, device=device) * 0.02)
+        self.lora_A = nn.Parameter(torch.randn(in_features, r, device=device) * 0.02)
+        self.lora_B = nn.Parameter(torch.randn(r, out_features, device=device) * 0.02)
 
-        # Debug output
         print(f"[LoRALinear] Init on device: {device}")
         print(f"  - weight shape: {self.weight.shape}")
         print(f"  - lora_A shape: {self.lora_A.shape}")
@@ -210,15 +207,13 @@ class LoRALinear(nn.Module):
     def forward(self, x):
         if x.device != self.lora_A.device:
             print(f"⚠️ Device mismatch: x.device={x.device}, lora_A.device={self.lora_A.device}")
-            # Auto-correcting
             self.lora_A = self.lora_A.to(x.device)
             self.lora_B = self.lora_B.to(x.device)
 
         original = F.linear(x, self.weight, self.bias)
-        lora = self.dropout(F.linear(x, self.lora_A.T))
-        lora = F.linear(lora, self.lora_B) * (self.alpha / self.r)
-        return original + lora
-
+        lora = self.dropout(x @ self.lora_A)  # (batch, seq, r)
+        lora = lora @ self.lora_B             # (batch, seq, out)
+        return original + lora * (self.alpha / self.r)
 
 class MultiHeadSelfAttention(nn.Module):
     r"""Multi-head self-attention module.
