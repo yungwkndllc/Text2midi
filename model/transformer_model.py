@@ -181,9 +181,8 @@ def apply_rotary_emb(x: torch.Tensor, freqs_cis: torch.Tensor) -> torch.Tensor:
     
     return x
 
-
 class LoRALinear(nn.Module):
-    def __init__(self, in_features, out_features, r=4, alpha=1.0, dropout=0.0, bias=True, device=None, dtype=None):
+    def __init__(self, in_features, out_features, r=4, alpha=1.0, dropout=0.0, bias=True, device=None, **kwargs):
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
@@ -191,23 +190,30 @@ class LoRALinear(nn.Module):
         self.alpha = alpha
         self.dropout = nn.Dropout(dropout)
 
-        # Base weight
-        self.weight = nn.Parameter(torch.empty(out_features, in_features, device=device, dtype=dtype))
-        nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
-
-        # Optional bias
+        # Base weight (standard linear layer)
+        self.weight = nn.Parameter(torch.randn(out_features, in_features) * 0.02)
         if bias:
-            self.bias = nn.Parameter(torch.zeros(out_features, device=device, dtype=dtype))
+            self.bias = nn.Parameter(torch.zeros(out_features))
         else:
             self.register_parameter("bias", None)
 
         # LoRA adapters
-        self.lora_A = nn.Parameter(torch.empty(r, in_features, device=device, dtype=dtype))
-        self.lora_B = nn.Parameter(torch.empty(out_features, r, device=device, dtype=dtype))
-        nn.init.kaiming_uniform_(self.lora_A, a=math.sqrt(5))
-        nn.init.zeros_(self.lora_B)
+        self.lora_A = nn.Parameter(torch.randn(r, in_features, device=device) * 0.02)
+        self.lora_B = nn.Parameter(torch.randn(out_features, r, device=device) * 0.02)
+
+        # Debug output
+        print(f"[LoRALinear] Init on device: {device}")
+        print(f"  - weight shape: {self.weight.shape}")
+        print(f"  - lora_A shape: {self.lora_A.shape}")
+        print(f"  - lora_B shape: {self.lora_B.shape}")
 
     def forward(self, x):
+        if x.device != self.lora_A.device:
+            print(f"⚠️ Device mismatch: x.device={x.device}, lora_A.device={self.lora_A.device}")
+            # Auto-correcting
+            self.lora_A = self.lora_A.to(x.device)
+            self.lora_B = self.lora_B.to(x.device)
+
         original = F.linear(x, self.weight, self.bias)
         lora = self.dropout(F.linear(x, self.lora_A.T))
         lora = F.linear(lora, self.lora_B) * (self.alpha / self.r)
@@ -251,8 +257,8 @@ class MultiHeadSelfAttention(nn.Module):
         self.scale = self.dim_head ** -0.5
         self.heads = num_heads
         hidden_dim = self.dim_head * num_heads
-        self.to_qkv = LoRALinear(embed_dim, hidden_dim * 3, r=8, alpha=16, dropout=0.05, **factory_kwargs)
-        self.to_out = LoRALinear(hidden_dim, embed_dim, bias=False, **factory_kwargs)
+        self.to_qkv = LoRALinear(embed_dim, hidden_dim * 3, r=8, alpha=16, dropout=0.05, device=device)
+        self.to_out = LoRALinear(hidden_dim, embed_dim, bias=False, device=device)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x: torch.Tensor, is_causal: bool = True) -> torch.Tensor:
