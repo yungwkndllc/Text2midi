@@ -329,6 +329,8 @@ class Transformer(Module):
                  bias: bool = True, device=None, dtype=None) -> None:
         factory_kwargs = {'device': device, 'dtype': dtype}
         super().__init__()
+        self.device = device
+
         torch._C._log_api_usage_once(f"torch.nn.modules.{self.__class__.__name__}")
 
         self.use_moe = use_moe
