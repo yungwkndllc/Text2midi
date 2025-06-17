@@ -251,7 +251,7 @@ class MultiHeadSelfAttention(nn.Module):
         self.scale = self.dim_head ** -0.5
         self.heads = num_heads
         hidden_dim = self.dim_head * num_heads
-        self.to_qkv = LoRALinear(embed_dim, hidden_dim * 3, r=8, alpha=16, dropout=0.05)
+        self.to_qkv = LoRALinear(embed_dim, hidden_dim * 3, r=8, alpha=16, dropout=0.05, **factory_kwargs)
         self.to_out = LoRALinear(hidden_dim, embed_dim, bias=False, **factory_kwargs)
         self.dropout = nn.Dropout(dropout)
 
