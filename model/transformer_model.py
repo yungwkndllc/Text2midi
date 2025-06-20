@@ -182,7 +182,9 @@ def apply_rotary_emb(x: torch.Tensor, freqs_cis: torch.Tensor) -> torch.Tensor:
     return x
 
 class LoRALinear(nn.Module):
-    def __init__(self, in_features, out_features, r=4, alpha=1.0, dropout=0.0, bias=True, device=None, **kwargs):
+    def __init__(self, in_features, out_features, r=4, alpha=1.0, dropout=0.0, bias=True, device=None, lora_rank: int = 4, 
+             lora_alpha: float = 16.0, 
+             lora_dropout: float = 0.1, **kwargs):
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
@@ -243,7 +245,11 @@ class MultiHeadSelfAttention(nn.Module):
         batch_first: bool = True,
         device: Optional[torch.device] = None,
         dtype: Optional[torch.dtype] = None,
+        lora_rank: int = 4,
+        lora_alpha: float = 16.0,
+        lora_dropout: float = 0.1,
     ):
+
         factory_kwargs = {'device': device, 'dtype': dtype}
         super().__init__()
         self.embed_dim = embed_dim
@@ -252,8 +258,9 @@ class MultiHeadSelfAttention(nn.Module):
         self.scale = self.dim_head ** -0.5
         self.heads = num_heads
         hidden_dim = self.dim_head * num_heads
-        self.to_qkv = LoRALinear(embed_dim, hidden_dim * 3, r=8, alpha=16, dropout=0.05, device=device)
-        self.to_out = LoRALinear(hidden_dim, embed_dim, bias=False, device=device)
+        self.to_qkv = LoRALinear(embed_dim, hidden_dim * 3, r=lora_rank, alpha=lora_alpha, dropout=lora_dropout, device=device)
+        self.to_out = LoRALinear(hidden_dim, embed_dim, r=lora_rank, alpha=lora_alpha, dropout=lora_dropout, bias=False, device=device)
+
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x: torch.Tensor, is_causal: bool = True) -> torch.Tensor:
@@ -328,11 +335,13 @@ class Transformer(Module):
     """
 
     def __init__(self, n_vocab: int = 30000, d_model: int = 512, nhead: int = 8, max_len: int = 5000,
-                 num_decoder_layers: int = 6, dim_feedforward: int = 2048, use_moe: bool = False, 
-                 num_experts: int = 16, dropout: float = 0.1, 
-                 activation: Union[str, Callable[[Tensor], Tensor]] = F.relu,
-                 layer_norm_eps: float = 1e-5, batch_first: bool = True, norm_first: bool = False,
-                 bias: bool = True, device=None, dtype=None) -> None:
+                num_decoder_layers: int = 6, dim_feedforward: int = 2048, use_moe: bool = False, 
+                num_experts: int = 16, dropout: float = 0.1, 
+                activation: Union[str, Callable[[Tensor], Tensor]] = F.relu,
+                layer_norm_eps: float = 1e-5, batch_first: bool = True, norm_first: bool = False,
+                bias: bool = True, device=None, dtype=None,
+                lora_rank: int = 4, lora_alpha: int = 16, lora_dropout: float = 0.1) -> None:
+
         factory_kwargs = {'device': device, 'dtype': dtype}
         super().__init__()
         self.device = device
@@ -340,6 +349,10 @@ class Transformer(Module):
         torch._C._log_api_usage_once(f"torch.nn.modules.{self.__class__.__name__}")
 
         self.use_moe = use_moe
+
+        self.lora_rank = lora_rank
+        self.lora_alpha = lora_alpha
+        self.lora_dropout = lora_dropout
 
         self.input_emb = nn.Embedding(n_vocab, d_model, **factory_kwargs)
         self.pos_encoder = PositionalEncoding(d_model, dropout, max_len).to(device)
@@ -350,9 +363,22 @@ class Transformer(Module):
         for param in self.encoder.parameters():
             param.requires_grad = False
 
-        decoder_layer = TransformerDecoderLayer(d_model, nhead, dim_feedforward, use_moe, num_experts, dropout,
-                                                activation, layer_norm_eps, batch_first, norm_first,
-                                                bias, **factory_kwargs)
+        decoder_layer = TransformerDecoderLayer(
+                            d_model, nhead, dim_feedforward,
+                            use_moe=use_moe,
+                            num_experts=num_experts,
+                            dropout=dropout,
+                            activation=activation,
+                            layer_norm_eps=layer_norm_eps,
+                            batch_first=batch_first,
+                            norm_first=norm_first,
+                            bias=bias,
+                            lora_rank=self.lora_rank,
+                            lora_alpha=self.lora_alpha,
+                            lora_dropout=self.lora_dropout,
+                            **factory_kwargs
+                        )
+        
         decoder_norm = LayerNorm(d_model, eps=layer_norm_eps, bias=bias, **factory_kwargs)
         self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers, use_moe, decoder_norm)
 
@@ -1114,13 +1140,24 @@ class TransformerDecoderLayer(Module):
     __constants__ = ['norm_first']
 
     def __init__(self, d_model: int, nhead: int, dim_feedforward: int = 2048, use_moe: bool = False, num_experts: int = 16,
-                 dropout: float = 0.1, activation: Union[str, Callable[[Tensor], Tensor]] = F.relu,
-                 layer_norm_eps: float = 1e-5, batch_first: bool = False, norm_first: bool = False,
-                 bias: bool = True, device=None, dtype=None) -> None:
+                dropout: float = 0.1, activation: Union[str, Callable[[Tensor], Tensor]] = F.relu,
+                layer_norm_eps: float = 1e-5, batch_first: bool = False, norm_first: bool = False,
+                bias: bool = True, device=None, dtype=None,
+                lora_rank: int = 4, lora_alpha: int = 16, lora_dropout: float = 0.1) -> None:
+
         factory_kwargs = {'device': device, 'dtype': dtype}
         super().__init__()
 
-        self.self_attn = MultiHeadSelfAttention(d_model, nhead, dropout=dropout, batch_first=batch_first, **factory_kwargs) 
+        self.self_attn = MultiHeadSelfAttention(
+                            d_model,
+                            nhead,
+                            dropout=dropout,
+                            batch_first=batch_first,
+                            device=device,
+                            lora_rank=lora_rank,
+                            lora_alpha=lora_alpha,
+                            lora_dropout=lora_dropout
+                        ) 
         self.multihead_attn = MultiheadAttention(d_model, nhead, dropout=dropout, batch_first=batch_first,
                                                  bias=bias, **factory_kwargs)
         self.use_moe = use_moe
@@ -1144,9 +1181,9 @@ class TransformerDecoderLayer(Module):
             ).to(device)
         else:
             # Implementation of Feedforward model
-            self.linear1 = Linear(d_model, dim_feedforward, bias=bias, **factory_kwargs)
+            self.linear1 = LoRALinear(d_model, dim_feedforward, r=lora_rank, alpha=lora_alpha, dropout=lora_dropout, bias=bias, device=device)
             self.dropout = Dropout(dropout)
-            self.linear2 = Linear(dim_feedforward, d_model, bias=bias, **factory_kwargs)
+            self.linear2 = LoRALinear(dim_feedforward, d_model, r=lora_rank, alpha=lora_alpha, dropout=lora_dropout, bias=bias, device=device)
 
         self.norm_first = norm_first
         self.norm1 = LayerNorm(d_model, eps=layer_norm_eps, bias=bias, **factory_kwargs)
